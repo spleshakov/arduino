@@ -1,0 +1,186 @@
+// imports
+#include <Arduino.h>
+#include <Stepper.h>
+
+// pins
+#define STEPPER_PIN_1 4
+#define STEPPER_PIN_2 5
+
+#define BUZZER_PIN 3
+
+#define BUTTON_PIN_1 8
+#define LED_PIN_1 9
+#define BUTTON_PIN_2 10
+#define LED_PIN_2 12
+#define BUTTON_PIN_3 11
+#define LED_PIN_3 13
+
+// other vars
+int motorRPM = 30;
+int delayPerStep= 1/(motorRPM/60)/360*1.8*1000;
+int dispenseDirection = true;
+
+#define DEBUG 1
+#if DEBUG == 1
+#define log(message) Serial.println(message)
+#else
+#define log(message)
+#endif
+
+class Controller {
+  private:
+    int led_pin;
+    int button_pin;
+    int button_state = 0;
+  public:
+    Controller(int led_pin, int button_pin) {
+      this -> led_pin = led_pin;
+      this -> button_pin = button_pin;
+      init();
+    }
+
+    void init() {
+      pinMode(led_pin, OUTPUT);
+      pinMode(button_pin, INPUT);
+    }
+
+    void ledOn() {
+      digitalWrite(led_pin, HIGH);
+    }
+
+    void ledOff() {
+      digitalWrite(led_pin, LOW);
+    }
+
+    void toggleLED() {
+      digitalWrite(led_pin, !digitalRead(led_pin));
+    }
+    
+    bool ledIsOn() {
+      return (getLedState() == HIGH);
+    }
+    
+    bool ledIsOff() {
+      return (getLedState() == LOW);
+    }
+
+    byte getLedState() {
+      return digitalRead(led_pin);
+    }
+
+    bool buttonIsPressed() {
+      if (getButtonState() == HIGH && button_state == 0) {
+        log("buttonIsPressed if condition");
+        button_state = 1;
+        return true;
+      } else if (getButtonState() == LOW && button_state == 1) {
+        log("buttonIsPressed else if condition");
+        button_state = 0;
+      }
+      return false;
+    }
+
+    byte getButtonState() {
+      return digitalRead(button_pin);
+    }
+};
+
+void successSound() {
+  tone(BUZZER_PIN, 988);
+  delay(100);
+  tone(BUZZER_PIN, 1319);
+  delay(400);
+  noTone(BUZZER_PIN);
+}
+
+void failureSound() {
+  tone(BUZZER_PIN, 330);
+  delay(100);
+  tone(BUZZER_PIN, 245);
+  delay(400);
+  noTone(BUZZER_PIN);
+}
+
+// instantiate controllers
+Controller controller1(LED_PIN_1, BUTTON_PIN_1);
+Controller controller2(LED_PIN_2, BUTTON_PIN_2);
+Controller controller3(LED_PIN_3, BUTTON_PIN_3);
+Stepper motor(200, STEPPER_PIN_1, STEPPER_PIN_2);
+
+void setup() {
+
+  if (DEBUG == 1) {
+    Serial.begin(9600);
+    Serial.println("Started");
+  }
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  
+  randomSeed(analogRead(0)); // to randomize preudo random number generation
+  
+  motor.setSpeed(motorRPM);
+  
+  delay(300);
+}
+
+void loop() {
+  if (controller1.ledIsOff() && controller2.ledIsOff() && controller3.ledIsOff()) {
+    int randomNumber = random(1,4);
+    if (randomNumber == 1) {
+      controller1.ledOn();
+    } else if (randomNumber == 2) {
+      controller2.ledOn();
+    } else if (randomNumber == 3) {
+      controller3.ledOn();
+    }
+    // controller3.ledOn();
+  }
+  
+  if (controller1.buttonIsPressed()) {
+    if (controller1.ledIsOn()) {
+      controller1.ledOff();
+      successRoutine();
+    } else {
+      failureSound();
+    }
+  } else if (controller2.buttonIsPressed()) {
+    if (controller2.ledIsOn()) {
+      controller2.ledOff();
+      successRoutine();
+    } else {
+      failureSound();
+    }
+  } else if (controller3.buttonIsPressed()) {
+    if (controller3.ledIsOn()) {
+      controller3.ledOff();
+      successRoutine();
+    } else {
+      failureSound();
+    }
+  }
+  
+}
+
+void successRoutine() {
+  successSound();
+  turnAuger(50);
+  delay(1000);
+}
+
+void turnMotor(int steps) {
+  motor.step(steps);
+  delay(abs(steps*delayPerStep));
+}
+
+void turnAuger(int steps) {
+  int stepsForward = 50;
+  int stepsBackward = 30;
+  
+  int count = 0;
+  while (count < steps) {
+    count = count + stepsForward - stepsBackward;
+    turnMotor(stepsForward);
+    turnMotor(-stepsBackward);
+  }
+  // turnMotor(200);
+}
